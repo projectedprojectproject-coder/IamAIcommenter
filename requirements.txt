@@ -1,0 +1,5 @@
+anthropic>=2.9.0
+# YouTube 어댑터용
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2

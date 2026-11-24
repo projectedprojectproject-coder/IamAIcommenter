@@ -1,0 +1,58 @@
+# 이 파일을 config.toml 로 복사해서 수정하세요.
+
+# 사용할 플랫폼: youtube | instagram | threads | facebook | x | mock(테스트용)
+# 여러 SNS 를 쓰려면 이 파일을 SNS 별로 복사해 platform 만 바꾸고 --config 로 골라 실행하세요.
+platform = "youtube"
+
+[claude]
+model = "claude-opus-5-5"
+use_fallbacks = true        # 안전 분류기 거절 시 서버가 다른 모델로 자동 재시도
+reader_effort = "low"       # 읽기는 단순 분류라 low 로 충분
+writer_effort = "medium"
+reviewer_effort = "medium"
+
+[brand]
+name = "내 채널"
+guide_file = "brand_guide.md"   # 말투 가이드
+faq_file = "faq.md"             # 자주 묻는 질문 (답글에서 단정해도 되는 사실들)
+
+[pipeline]
+fetch_limit = 50            # 한 번에 가져올 댓글 수
+max_per_run = 20            # 한 번에 처리할 새 댓글 수 (비용 상한)
+max_rewrites = 2            # 검수 반려 시 재작성 횟수
+auto_post = false           # true 면 아래 분류는 사람 승인 없이 바로 게시
+auto_post_categories = ["praise"]
+post_interval_seconds = 30  # 답글 사이 간격 (너무 빠르면 스팸으로 판정될 수 있음)
+db_file = "data/autoreply.db"
+ai_disclosure = ""          # 예: " (AI 답변)" — 답글 끝에 붙일 표기
+
+[youtube]
+client_secret_file = "secrets/client_secret.json"
+token_file = "secrets/youtube_token.json"
+video_ids = []              # 비워 두면 채널 전체 댓글, 지정하면 해당 영상만
+
+[instagram]
+token_file = "secrets/instagram.json"
+login = "instagram"         # instagram(권장, 페이지 불필요) | facebook(페이지 연결 계정)
+api_version = "v23.0"
+media_limit = 10            # 최근 게시물 몇 개의 댓글을 볼지
+auto_refresh_token = true   # 7일마다 장기 토큰 자동 갱신 (login="instagram" 일 때만)
+
+[threads]
+token_file = "secrets/threads.json"
+media_limit = 10
+publish_wait_seconds = 3    # 답글 컨테이너 생성 후 게시까지 대기
+auto_refresh_token = true
+
+[facebook]
+token_file = "secrets/facebook.json"
+api_version = "v23.0"
+post_limit = 10
+
+[x]
+token_file = "secrets/x.json"
+post_limit = 10             # 최근 게시물 몇 개의 답글을 볼지 (5~100, 답글 검색은 최근 7일만)
+
+[mock]
+comments_file = "samples/comments.json"
+posted_file = "data/mock_posted.jsonl"

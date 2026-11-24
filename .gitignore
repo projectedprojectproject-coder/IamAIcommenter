@@ -1,0 +1,4 @@
+config.toml
+secrets/
+data/
+__pycache__/
