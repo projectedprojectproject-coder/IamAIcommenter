@@ -99,6 +99,13 @@ class ThreadsPlatform(Platform):
             self._texts[post_id] = self._get(post_id, fields="text").get("text", "")
         return f"원글: {self._texts[post_id][:1500]}"
 
+    def already_replied(self, comment: Comment) -> bool:
+        replies = _http.graph_paged(
+            f"{BASE}/{comment.id}/replies",
+            {"fields": "id,username", "limit": 100, "access_token": self.token}, 500,
+        )
+        return any(r.get("username") == self.username for r in replies)
+
     def post_reply(self, comment: Comment, text: str) -> str:
         # Threads 는 '컨테이너 생성 → 게시' 2단계
         container = _http.request("POST", f"{BASE}/me/threads", form={

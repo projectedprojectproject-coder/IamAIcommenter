@@ -116,6 +116,16 @@ class XPlatform(Platform):
             self._texts[post_id] = self._call("GET", f"/tweets/{post_id}").get("data", {}).get("text", "")
         return f"원글: {self._texts[post_id]}"
 
+    def already_replied(self, comment: Comment) -> bool:
+        resp = self._call("GET", "/tweets/search/recent", {
+            "query": f"conversation_id:{comment.post_id} from:{self.user_id}",
+            "max_results": 100, "tweet.fields": "referenced_tweets",
+        })
+        return any(
+            x["type"] == "replied_to" and x["id"] == comment.id
+            for r in resp.get("data", []) for x in r.get("referenced_tweets", [])
+        )
+
     def post_reply(self, comment: Comment, text: str) -> str:
         resp = self._call("POST", "/tweets", json_body={
             "text": text, "reply": {"in_reply_to_tweet_id": comment.id},

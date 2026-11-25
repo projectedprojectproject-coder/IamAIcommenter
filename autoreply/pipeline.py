@@ -1,6 +1,7 @@
 """수집 → ① 읽기 → ② 작성 ⇄ ③ 검수 → 승인 대기 / 자동 게시."""
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import asdict
 
@@ -23,6 +24,8 @@ class Pipeline:
 
     # ───────── 1) 새 댓글 처리 ─────────
     def run(self) -> None:
+        # 지난번에 만든 초안 중, 그사이 SNS 에서 직접 답한 댓글은 대기열에서 뺀다
+        self._drop_already_replied(["pending_approval", "approved"])
         comments = self.platform.fetch_comments(self.p["fetch_limit"])
         new = [c for c in comments if not self.store.exists(self.platform.name, c.id)]
         todo = new[: self.p["max_per_run"]]
@@ -81,6 +84,26 @@ class Pipeline:
         self.store.save(c, status, reader=asdict(rr), draft=draft, review=asdict(rv))
         print("  → 자동 게시 대기" if auto else "  → 승인 대기 (python main.py review)")
 
+    # ───────── 이미 답한 댓글 걸러내기 ─────────
+    def _check_replied(self, c: Comment) -> bool | None:
+        """True: 이미 내 답글 있음 / False: 없음 / None: 확인 실패."""
+        try:
+            return self.platform.already_replied(c)
+        except Exception as e:  # 플랫폼별 예외가 달라 넓게 잡는다
+            print(f"  ! 기존 답글 확인 실패 ({c.author}): {e}")
+            return None
+
+    def _mark_replied(self, c: Comment) -> None:
+        self.store.update(c.platform, c.id, status="skipped", note="이미 답글이 달려 있음")
+        print(f"  - {c.author}: 이미 답글이 있어 건너뜀")
+
+    def _drop_already_replied(self, statuses: list[str]) -> None:
+        for status in statuses:
+            for row in self.store.by_status(self.platform.name, status):
+                c = Comment.from_dict(json.loads(row["comment"]))
+                if self._check_replied(c):
+                    self._mark_replied(c)
+
     # ───────── 2) 승인된 답글 게시 ─────────
     def post_approved(self) -> None:
         rows = self.store.by_status(self.platform.name, "approved")
@@ -88,10 +111,17 @@ class Pipeline:
             print("\n[게시] 게시할 답글이 없습니다.")
             return
         print(f"\n[게시] {len(rows)}개 게시 시작 (간격 {self.p['post_interval_seconds']}초)")
-        import json
         for i, row in enumerate(rows):
             c = Comment.from_dict(json.loads(row["comment"]))
             text = row["draft"] + self.p.get("ai_disclosure", "")
+            # 게시 직전에 다시 확인: 그사이 직접 답했으면 중복 답글을 달지 않는다
+            replied = self._check_replied(c)
+            if replied:
+                self._mark_replied(c)
+                continue
+            if replied is None:
+                print("    → 중복을 피하려고 이번엔 게시하지 않음 (다음 post 때 다시 시도)")
+                continue
             try:
                 reply_id = self.platform.post_reply(c, text)
                 self.store.update(c.platform, c.id, status="posted", reply_id=reply_id)

@@ -11,6 +11,8 @@
 """
 from __future__ import annotations
 
+import os
+
 from ..config import resolve
 from ..models import Comment, ThreadMessage
 from .base import Platform
@@ -49,10 +51,20 @@ class YouTubePlatform(Platform):
             creds = Credentials.from_authorized_user_file(str(self.token_file), SCOPES)
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+                from google.auth.exceptions import RefreshError
+                try:
+                    creds.refresh(Request())
+                except RefreshError as e:
+                    raise SystemExit(
+                        "YouTube 로그인 토큰이 만료되었습니다 (테스트 앱은 약 7일마다 만료).\n"
+                        f"{self.token_file} 를 지우고 직접 한 번 실행해 다시 로그인하세요."
+                    ) from e
             else:
                 if not self.client_secret.exists():
                     raise SystemExit(f"OAuth 클라이언트 파일이 없습니다: {self.client_secret}")
+                if os.environ.get("AUTOREPLY_UNATTENDED"):
+                    # 예약 실행 중에는 브라우저 로그인을 기다리며 멈추지 않도록 바로 종료
+                    raise SystemExit("YouTube 로그인이 필요합니다. 직접 한 번 실행해 로그인하세요.")
                 flow = InstalledAppFlow.from_client_secrets_file(str(self.client_secret), SCOPES)
                 creds = flow.run_local_server(port=0)
             self.token_file.parent.mkdir(parents=True, exist_ok=True)
@@ -137,6 +149,19 @@ class YouTubePlatform(Platform):
                 f"영상 설명: {sn.get('description', '')[:1500]}"
             )
         return self._ctx_cache[post_id]
+
+    def already_replied(self, comment: Comment) -> bool:
+        page_token = None
+        while True:
+            resp = self.yt.comments().list(
+                part="snippet", parentId=comment.id, maxResults=100,
+                textFormat="plainText", pageToken=page_token,
+            ).execute()
+            if any(self._author_id(r["snippet"]) == self.my_channel_id for r in resp.get("items", [])):
+                return True
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                return False
 
     # ---------- 게시 ----------
     def post_reply(self, comment: Comment, text: str) -> str:

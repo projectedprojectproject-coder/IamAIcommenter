@@ -325,6 +325,7 @@ python main.py run --config config.instagram.toml
 | `fetch_comments(limit)` | 내 게시물의 댓글 중 **아직 내가 답하지 않은 것**만 `Comment` 목록으로 반환. 기존 대댓글은 `thread` 에 넣어 맥락으로 전달 |
 | `get_post_context(post_id)` | 원글 제목·본문 텍스트 반환 (같은 글은 캐시 권장) |
 | `post_reply(comment, text)` | `comment.id` 에 대댓글을 달고 생성된 답글 ID 반환 |
+| `already_replied(comment)` (선택) | 지금 이 댓글에 내 답글이 있는지 확인. 게시 직전 중복 방지에 쓰임 (구현 안 하면 확인 생략) |
 
 1. `autoreply/platforms/<이름>.py` 작성 (HTTP 는 `_http.py` 의 `request`, `load_secret` 사용)
 2. `autoreply/platforms/__init__.py` 의 `get_platform()` 에 분기 추가
@@ -378,7 +379,14 @@ python main.py post --config config.youtube.toml
 
 ### 6-4. 자동화 단계 높이기
 - 몇 주간 review 에서 고칠 게 거의 없다면 `auto_post = true` 로 바꿉니다. `auto_post_categories`(기본: 칭찬)에 해당하는 답글만 승인 없이 바로 게시되고, 나머지는 계속 review 를 거칩니다.
-- 정기 실행: Windows **작업 스케줄러** → 기본 작업 만들기 → 프로그램 `python`, 인수 `main.py run`, 시작 위치에 이 폴더 경로를 넣습니다.
+- 정기 실행: `run_daily.ps1` 이 `run` → `post` → `status` 를 차례로 실행하고 기록을 `data\logs\날짜.log` 에 남깁니다. `post` 는 review 에서 **이미 승인한 답글만** 게시합니다. 아래 명령으로 매일 오전 9시 작업을 등록합니다 (PC 가 꺼져 있었으면 켜진 뒤 실행).
+  ```powershell
+  $s = (Resolve-Path run_daily.ps1).Path; Register-ScheduledTask -TaskName "SNS 대댓글 자동화" -Action (New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$s`"") -Trigger (New-ScheduledTaskTrigger -Daily -At 9:00am) -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable)
+  ```
+  - 다른 SNS 는 `-File` 뒤에 `-Config config.instagram.toml` 처럼 붙입니다.
+  - 예약 실행 중에는 브라우저 로그인을 기다리지 않습니다. YouTube 토큰이 만료되면 로그에 안내가 남으니, 직접 한 번 실행해 다시 로그인하세요.
+  - 작업 삭제: `Unregister-ScheduledTask -TaskName "SNS 대댓글 자동화"`
+  - `run_daily.ps1` 을 고칠 때는 **UTF-8 (BOM)** 으로 저장하세요. BOM 이 없으면 Windows PowerShell 이 한글을 잘못 읽어 실행되지 않습니다.
 - 비용 조절: `max_per_run`(한 번에 처리할 댓글 수)을 줄이거나, `[claude]` 의 effort 를 낮춥니다. 댓글 1개당 Claude 호출은 3번(읽기·작성·검수)이며, 검수에서 반려되면 늘어납니다.
 
 ### 6-5. 답글 품질 다듬기
@@ -403,6 +411,7 @@ python main.py post --config config.youtube.toml
 
 ## 안전 장치
 - 같은 댓글에 두 번 답하지 않도록 SQLite(`data/autoreply.db`)에 처리 기록을 남기고, 플랫폼에서도 이미 내가 답한 댓글은 건너뜁니다.
+- 초안을 만든 뒤 SNS 앱에서 직접 답했다면, 다음 `run` 과 게시 직전에 다시 확인해 그 초안을 "답글 안 함"으로 돌리고 게시하지 않습니다. 확인이 실패하면 중복을 피하려고 그 답글은 다음 `post` 때로 미룹니다.
 - 댓글 속 지시("이전 지시 무시하고…")는 데이터로만 취급하며, 조작 시도는 사람에게 넘깁니다.
 - 검수 에이전트는 작성 에이전트와 독립적으로 호출되어 체크리스트 7개 항목을 점검합니다.
 - 할인·환불 같은 약속, FAQ에 없는 사실, 개인정보 요구, 링크는 금지됩니다.

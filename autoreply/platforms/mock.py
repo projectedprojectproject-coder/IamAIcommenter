@@ -40,6 +40,14 @@ class MockPlatform(Platform):
         p = self.posts.get(post_id, {})
         return f"제목: {p.get('title', '')}\n설명: {p.get('description', '')}"
 
+    def already_replied(self, comment: Comment) -> bool:
+        if not self.output_file.exists():
+            return False
+        for line in self.output_file.read_text(encoding="utf-8").splitlines():
+            if line.strip() and json.loads(line).get("parent_id") == comment.id:
+                return True
+        return False
+
     def post_reply(self, comment: Comment, text: str) -> str:
         reply_id = "mock-" + uuid.uuid4().hex[:8]
         self.output_file.parent.mkdir(parents=True, exist_ok=True)

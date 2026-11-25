@@ -27,3 +27,11 @@ class Platform(ABC):
     @abstractmethod
     def post_reply(self, comment: Comment, text: str) -> str:
         """댓글에 대댓글을 달고, 생성된 답글 ID 를 반환한다."""
+
+    def already_replied(self, comment: Comment) -> bool:
+        """지금 시점에 이 댓글에 내 답글이 이미 있는지 확인한다.
+
+        초안을 만든 뒤 SNS 앱에서 직접 답했을 수 있으므로 게시 직전에 다시 확인한다.
+        확인 방법이 없는 어댑터는 False(없음)를 돌려준다.
+        """
+        return False

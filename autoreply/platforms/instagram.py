@@ -104,6 +104,13 @@ class InstagramPlatform(Platform):
             self._captions[post_id] = self._get(post_id, fields="caption").get("caption", "")
         return f"게시물 캡션: {self._captions[post_id][:1500]}"
 
+    def already_replied(self, comment: Comment) -> bool:
+        replies = _http.graph_paged(
+            f"{self.base}/{comment.id}/replies",
+            {"fields": "id,username", "limit": 50, "access_token": self.token}, 500,
+        )
+        return any(r.get("username") == self.username for r in replies)
+
     def post_reply(self, comment: Comment, text: str) -> str:
         resp = _http.request("POST", f"{self.base}/{comment.id}/replies",
                              form={"message": text, "access_token": self.token})

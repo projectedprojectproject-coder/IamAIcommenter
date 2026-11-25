@@ -74,6 +74,13 @@ class FacebookPlatform(Platform):
             self._texts[post_id] = r.get("message", "")
         return f"페이지 게시물: {self._texts[post_id][:1500]}"
 
+    def already_replied(self, comment: Comment) -> bool:
+        subs = _http.graph_paged(
+            f"{self.base}/{comment.id}/comments",
+            {"fields": "id,from{id}", "limit": 50, "access_token": self.token}, 500,
+        )
+        return any((s.get("from") or {}).get("id") == self.page_id for s in subs)
+
     def post_reply(self, comment: Comment, text: str) -> str:
         resp = _http.request("POST", f"{self.base}/{comment.id}/comments",
                              form={"message": text, "access_token": self.token})
