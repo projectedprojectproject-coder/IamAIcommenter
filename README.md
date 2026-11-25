@@ -33,7 +33,10 @@ YouTube, Instagram, Threads, Facebook 페이지, X 를 지원합니다.
 | 2 | Claude API 키 저장 (한 번만) | 아래 1-2 참고 |
 | 3 | 설정 파일 만들기 | `config.example.toml` 을 복사해 `config.toml` 로 이름 변경 |
 | 4 | mock 으로 시험 | `python main.py run` → `python main.py review` → `python main.py post` |
-| 5 | 실제 SNS 연결 | 3번 섹션에서 원하는 SNS 연결 후 `config.toml` 의 `platform` 변경 |
+| 5 | 실제 SNS 연결 | 3번 섹션대로 연결하고 `config.toml` 을 `config.youtube.toml` 처럼 SNS 별로 복사해 `platform` 변경 |
+| 6 | 실제 운영 | `python main.py run --config config.youtube.toml` → `review` → `post` (같은 `--config` 를 붙임) |
+
+> mock 용 `config.toml` 은 그대로 두고 SNS 마다 설정 파일을 따로 만드는 것을 권합니다. `config.*.toml` 은 git 에 올라가지 않습니다.
 
 ## 1. 설치
 
@@ -110,25 +113,31 @@ python main.py run
 
 ### 3-1. YouTube
 
+개인 Google 계정으로 충분합니다. 사업자 등록·카드 등록·비용이 필요 없고, 처음 한 번 10~15분 걸립니다.
+
 **① Google Cloud 프로젝트 만들기**
-1. [Google Cloud Console](https://console.cloud.google.com/) 접속 → 상단 프로젝트 선택 → **새 프로젝트**
-2. **API 및 서비스 → 라이브러리** 에서 `YouTube Data API v3` 검색 → **사용 설정**
+1. [Google Cloud Console](https://console.cloud.google.com/) 접속 → 상단 프로젝트 선택 → **새 프로젝트** → 만든 프로젝트 선택
+2. **API 및 서비스 → 라이브러리** 에서 `YouTube Data API v3` 검색 → **사용**
 
 **② OAuth 동의 화면 (Google 인증 플랫폼)**
-1. **API 및 서비스 → OAuth 동의 화면** → 사용자 유형 **외부** 선택
-2. 앱 이름, 지원 이메일 입력
-3. **테스트 사용자**에 채널을 운영하는 Google 계정을 추가
+1. 왼쪽 메뉴 **Google 인증 플랫폼 → 시작하기**
+2. 앱 이름(아무거나), 지원 이메일 → 대상 **외부** → 연락처 이메일 → 약관 동의 → **만들기**
+3. **대상 → 테스트 사용자 → Add users** 에 **유튜브 채널을 가진 Gmail** 을 추가하고 저장
 
-> ⚠️ 앱이 "테스트" 상태이면 로그인 토큰이 **7일마다 만료**됩니다. 매주 다시 로그인하기 싫다면 게시 상태를 **프로덕션**으로 바꾸세요. 본인만 쓰는 앱은 구글 검증 없이도 사용할 수 있고, 로그인 때 "확인되지 않은 앱" 경고가 뜨면 **고급 → 이동**을 누르면 됩니다.
+> ⚠️ 테스트 사용자에 없는 계정으로 로그인하면 `403 오류: access_denied` ("인증 절차를 완료하지 않았습니다") 가 뜹니다. 로그인한 주소와 추가한 주소가 같은지 확인하세요.
+> ⚠️ 앱이 "테스트" 상태이면 로그인 토큰이 **7일마다 만료**될 수 있습니다. 그때는 `secrets/youtube_token.json` 을 지우고 다시 실행해 로그인하면 됩니다.
 
-**③ OAuth 클라이언트 ID 만들기**
-1. **API 및 서비스 → 사용자 인증 정보 → 사용자 인증 정보 만들기 → OAuth 클라이언트 ID**
-2. 애플리케이션 유형: **데스크톱 앱**
-3. **JSON 다운로드** → `secrets/client_secret.json` 으로 저장
+**③ OAuth 클라이언트 만들기**
+1. **Google 인증 플랫폼 → 클라이언트 → 클라이언트 만들기**
+2. 애플리케이션 유형: **데스크톱 앱** → **만들기**
+3. **JSON 다운로드** → 받은 `client_secret_....json` 파일 이름을 `client_secret.json` 으로 바꿔 `secrets` 폴더에 넣기
+
+> 이 파일에는 비밀값이 들어 있습니다. 채팅·메신저에 붙여 넣거나 git 에 올리지 마세요. 노출됐다면 **클라이언트** 메뉴에서 보안 비밀을 새로 발급하세요.
 
 **④ 설정하고 첫 로그인**
+`config.toml` 을 `config.youtube.toml` 로 복사하고 아래처럼 바꿉니다.
 ```toml
-# config.toml
+# config.youtube.toml
 platform = "youtube"
 
 [youtube]
@@ -136,10 +145,30 @@ client_secret_file = "secrets/client_secret.json"
 token_file = "secrets/youtube_token.json"
 video_ids = []      # 비우면 채널 전체, ["영상ID1", "영상ID2"] 처럼 특정 영상만 가능
 ```
-```bash
-python main.py run
+```powershell
+python main.py run --config config.youtube.toml
 ```
-브라우저가 열리면 **채널이 있는 계정**으로 로그인하고 권한을 허용합니다. 브랜드 계정 채널이면 채널 선택 화면에서 해당 채널을 고르세요. 이후에는 `secrets/youtube_token.json` 이 자동으로 쓰입니다.
+브라우저가 열리면:
+1. **테스트 사용자로 추가한 채널 계정**으로 로그인 (브랜드 계정 채널이면 채널 선택 화면에서 해당 채널 선택)
+2. "Google에서 확인하지 않은 앱" 경고 → **계속** (내가 만든 테스트 앱이라 나오는 정상 경고)
+3. 권한 요청 → **허용** → 브라우저에 "The authentication flow has completed" 가 나오면 완료
+
+이후에는 `secrets/youtube_token.json` 이 자동으로 쓰여 로그인 없이 실행됩니다.
+
+**⑤ 첫 테스트**
+- **내 채널 계정으로 단 댓글은 건너뜁니다.** 동작을 확인하려면 **다른 Google 계정**으로 내 영상에 댓글을 달아 보세요 (일부 공개 영상도 링크로 댓글 가능).
+- 댓글이 없으면 `가져온 댓글 0개` 로 끝납니다. 연결 문제가 아닙니다.
+- 실제 실행 예:
+```
+[수집] 가져온 댓글 2개 / 새 댓글 2개 / 이번에 처리 2개
+
+[1/2] @시청자1: 참 잘했네요
+  ① 읽기: praise/positive 답글=True 사람=False - 시청자가 영상에 대해 잘했다고 칭찬함.
+  ② 작성(시도 1): 시청자1님, 좋게 봐주셔서 정말 감사해요. 다음 영상도 기대해 주세요 😊
+  ③ 검수: 통과
+  → 승인 대기 (python main.py review)
+```
+이어서 `review --config config.youtube.toml` 로 승인하고 `post --config config.youtube.toml` 로 게시하면 유튜브에 답글이 올라갑니다.
 
 **참고**
 - 쿼터: 하루 10,000 단위 (댓글 조회 1단위, 답글 작성 50단위) → 하루 약 150~200개 답글이 상한
@@ -332,10 +361,19 @@ python main.py run --config config.instagram.toml
 | `s` 또는 Enter | 이번엔 건너뛰기 (다음 review 때 다시 나옴) |
 | `q` | 종료 |
 
-### 6-3. 하루 운영 예시
-1. 아침: `python main.py run` 으로 밤사이 댓글 처리
-2. `python main.py review` 로 초안 확인·승인
-3. `python main.py post` 로 게시
+### 6-3. 하루 운영 예시 (YouTube)
+```powershell
+python main.py run --config config.youtube.toml
+```
+```powershell
+python main.py review --config config.youtube.toml
+```
+```powershell
+python main.py post --config config.youtube.toml
+```
+1. 아침: `run` 으로 밤사이 댓글 처리
+2. `review` 로 초안 확인·승인
+3. `post` 로 게시
 4. `python main.py escalated` 로 악플·문의 등은 직접 대응 (SNS 앱에서 직접 답하세요)
 
 ### 6-4. 자동화 단계 높이기
@@ -344,6 +382,7 @@ python main.py run --config config.instagram.toml
 - 비용 조절: `max_per_run`(한 번에 처리할 댓글 수)을 줄이거나, `[claude]` 의 effort 를 낮춥니다. 댓글 1개당 Claude 호출은 3번(읽기·작성·검수)이며, 검수에서 반려되면 늘어납니다.
 
 ### 6-5. 답글 품질 다듬기
+- 기본 말투 가이드는 혼자 운영하는 채널 기준으로 **1인칭 단수**("저", "I")로 답하게 되어 있습니다. 팀 채널이라면 `brand_guide.md` 에서 "저희/we" 로 바꾸세요.
 - 말투가 마음에 안 들면 `brand_guide.md` 를, 사실관계(일정·장비·가격 등)는 `faq.md` 를 고칩니다. **FAQ 에 없는 사실은 답글에서 단정하지 않으므로**, 자주 받는 질문의 답을 FAQ 에 적어 둘수록 "확인해서 알려드릴게요" 같은 답이 줄어듭니다.
 - AI 가 쓴 답글임을 밝히려면 `ai_disclosure = " (AI 답변)"` 처럼 설정합니다.
 
@@ -354,6 +393,9 @@ python main.py run --config config.instagram.toml
 | `API 키가 올바르지 않습니다` | Console 에서 키가 삭제·만료되지 않았는지 확인하고 다시 저장 |
 | `설정 파일이 없습니다` | `config.example.toml` 을 `config.toml` 로 복사 |
 | `인증 파일이 없습니다: secrets/...` | 화면에 나온 형식대로 해당 SNS 인증 파일 생성 (3번 섹션) |
+| YouTube 로그인 시 `403 오류: access_denied` | 로그인한 Gmail 을 **Google 인증 플랫폼 → 대상 → 테스트 사용자**에 추가 후 다시 실행 |
+| YouTube 가 갑자기 로그인 오류(`invalid_grant`) | 테스트 앱 토큰 만료. `secrets/youtube_token.json` 삭제 후 다시 실행해 로그인 |
+| `가져온 댓글 0개` | 답할 새 댓글이 없음. 내 계정으로 단 댓글·이미 답한 댓글은 제외됨 |
 | `요청 한도 초과(429)` | 잠시 후 다시 실행. 자주 나면 `max_per_run` 을 줄이기 |
 | 게시 실패(`HTTP 400/403`) | 해당 SNS 권한(쓰기 권한)·토큰 만료 확인. 실패한 건 `status` 의 "게시 실패"에 남음 |
 | 한글이 깨져 보임 | PowerShell 대신 **Windows 터미널**을 쓰거나 글꼴을 바꿔 보기 |
