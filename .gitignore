@@ -2,3 +2,5 @@ config.toml
 secrets/
 data/
 __pycache__/
+config.*.toml
+!config.example.toml
